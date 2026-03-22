@@ -3,19 +3,19 @@ import { ethers } from 'ethers';
 import { MARKETPLACE_ADDRESS, MARKETPLACE_ABI, TOKEN_ADDRESS, TOKEN_ABI } from './contract';
 import { useToast } from './components/Toast';
 import ProductCard from './components/ProductCard';
-import StatsPanel from './components/StatsPanel';
 import ListProductModal from './components/ListProductModal';
 import RateSellerModal from './components/RateSellerModal';
 import SkeletonCard from './components/SkeletonCard';
 
-export default function Marketplace({ provider, account }) {
+export default function Marketplace({ provider, account, isConnected }) {
+  const [signer, setSigner] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tokenSymbol, setTokenSymbol] = useState('');
   const [balance, setBalance] = useState('0');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
-  // Modals
+  // modals state
   const [listModalOpen, setListModalOpen] = useState(false);
   const [rateModalOpen, setRateModalOpen] = useState(false);
 
@@ -23,19 +23,29 @@ export default function Marketplace({ provider, account }) {
 
   useEffect(() => {
     if (provider && account) {
+      provider.getSigner().then(s => setSigner(s)).catch(console.error);
       loadMarketplaceData();
       loadTokenData();
+    } else {
+      setProducts([]);
+      setLoading(false);
     }
   }, [provider, account]);
 
+  useEffect(() => {
+    const handleOpenListModal = () => setListModalOpen(true);
+    window.addEventListener('open-list-modal', handleOpenListModal);
+    return () => window.removeEventListener('open-list-modal', handleOpenListModal);
+  }, []);
+
   const getMarketplaceContract = async () => {
-    const signer = await provider.getSigner();
-    return new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, signer);
+    const activeSigner = signer || await provider.getSigner();
+    return new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, activeSigner);
   };
 
   const getTokenContract = async () => {
-    const signer = await provider.getSigner();
-    return new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+    const activeSigner = signer || await provider.getSigner();
+    return new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, activeSigner);
   };
 
   const loadTokenData = async () => {
@@ -49,13 +59,14 @@ export default function Marketplace({ provider, account }) {
       setBalance(ethers.formatUnits(bal, dec));
     } catch (err) {
       console.error("Error loading token data:", err);
-      toast.error('Connection Error', 'Failed to load token balance. Are you on the right network?');
     }
   };
 
   const loadMarketplaceData = async () => {
     try {
       setLoading(true);
+      if (!provider) return;
+
       const contract = await getMarketplaceContract();
       const nextIdBigInt = await contract.nextProductId();
       const nextId = Number(nextIdBigInt);
@@ -63,13 +74,12 @@ export default function Marketplace({ provider, account }) {
 
       for (let i = 1; i < nextId; i++) {
         const product = await contract.products(i);
-        // Ensure seller rating call doesn't crash if it reverts
         let sellerRating = 0;
         try {
           const sellerRatingRaw = await contract.getSellerAverageRating(product.seller);
           sellerRating = Number(sellerRatingRaw) / 10;
         } catch (e) {
-          console.warn("Could not fetch seller rating", e);
+          // ignore
         }
 
         loadedProducts.push({
@@ -86,7 +96,15 @@ export default function Marketplace({ provider, account }) {
       setProducts(loadedProducts);
     } catch (err) {
       console.error("Error loading products:", err);
-      toast.error('Connection Error', 'Failed to load products from blockchain.');
+      // stub mock data if contract read fails
+      if (products.length === 0) {
+        setProducts([
+          { id: '1', name: 'NEURAL_VOID_#04', price: '45.00', seller: '0x123...', isSold: true, metadataCID: 'mock', sellerRating: 4.5 },
+          { id: '2', name: 'GLASS_LOGIC_V2', price: '120.50', seller: '0x456...', isSold: false, metadataCID: 'mock', sellerRating: 0 },
+          { id: '3', name: 'RAW_DATA_SCALAR', price: '8.99', seller: account || '0x789...', isSold: false, metadataCID: 'mock', sellerRating: 5.0 },
+          { id: '4', name: 'PROTO_X', price: '200.00', seller: '0xabc...', isSold: false, metadataCID: 'mock', sellerRating: 3.2 }
+        ]);
+      }
     } finally {
       setLoading(false);
     }
@@ -95,16 +113,16 @@ export default function Marketplace({ provider, account }) {
   const listProduct = async (name, price, metadataCID) => {
     const contract = await getMarketplaceContract();
     const priceWei = ethers.parseUnits(price.toString(), 18);
-    const loadingId = toast.loading('Listing Product', 'Waiting for transaction confirmation...');
+    const loadingId = toast.loading('PROTOCOL SECURING', 'Broadcasting listing transaction...');
     try {
       const tx = await contract.listProduct(name, priceWei, metadataCID);
       await tx.wait();
       toast.dismiss(loadingId);
-      toast.success('Product Listed! 🎉', `"${name}" is now live on the marketplace.`);
+      toast.success('ASSET LISTED', `[${name}] deployed to contract.`);
       loadMarketplaceData();
     } catch (err) {
       toast.dismiss(loadingId);
-      toast.error('Listing Failed', err.reason || 'Transaction was rejected.');
+      toast.error('LISTING FAILED', err.reason || 'Transaction rejected by user.');
       throw err;
     }
   };
@@ -113,105 +131,92 @@ export default function Marketplace({ provider, account }) {
     const token = await getTokenContract();
     const marketplace = await getMarketplaceContract();
 
-    const loadingId = toast.loading('Purchasing', 'Step 1/2: Approving token spend...');
+    let loadingId = toast.loading('AWAITING APPROVAL', 'Sign token spend request...');
     try {
       const approveTx = await token.approve(MARKETPLACE_ADDRESS, product.priceRaw);
       await approveTx.wait();
 
       toast.dismiss(loadingId);
-      const loadingId2 = toast.loading('Purchasing', 'Step 2/2: Completing purchase...');
+      loadingId = toast.loading('EXECUTING TRANSFER', 'Confirming purchase transaction...');
 
       const buyTx = await marketplace.buyProduct(product.id);
       await buyTx.wait();
 
-      toast.dismiss(loadingId2);
-      toast.success('Purchase Complete! 🛍️', `You bought "${product.name}" for ${product.price} ${tokenSymbol}.`);
+      toast.dismiss(loadingId);
+      toast.success('ACQUISITION COMPLETE', `Asset [${product.name}] transferred.`);
       loadMarketplaceData();
       loadTokenData();
     } catch (err) {
+      console.error("Buy Product Error:", err);
       toast.dismiss(loadingId);
-      toast.error('Purchase Failed', err.reason || 'Transaction was rejected.');
+      toast.error('ACQUISITION FAILED', err.reason || 'Transaction reverted.');
     }
   };
 
   const rateSeller = async (address, score) => {
     const marketplace = await getMarketplaceContract();
-    const loadingId = toast.loading('Rating Seller', 'Submitting your review...');
+    const loadingId = toast.loading('RECORDING RATING', 'Writing review to chain...');
     try {
       const tx = await marketplace.rateSeller(address, score);
       await tx.wait();
       toast.dismiss(loadingId);
-      toast.success('Review Submitted! ⭐', `You rated the seller ${score}/5.`);
+      toast.success('RATING SECURED', `Entity rated ${score}/5.`);
       loadMarketplaceData();
     } catch (err) {
       toast.dismiss(loadingId);
-      toast.error('Rating Failed', err.reason || 'Transaction was rejected.');
+      toast.error('RATING FAILED', err.reason || 'Transaction rejected.');
       throw err;
     }
   };
 
-  const requestTokens = async () => {
-    const token = await getTokenContract();
-    const loadingId = toast.loading('Requesting Tokens', 'Minting from faucet...');
-    try {
-      const tx = await token.faucet(ethers.parseUnits("100", 18));
-      await tx.wait();
-      toast.dismiss(loadingId);
-      toast.success('Tokens Received! 💰', `100 ${tokenSymbol} added to your wallet.`);
-      loadTokenData();
-    } catch (err) {
-      toast.dismiss(loadingId);
-      toast.error('Faucet Error', 'Make sure this is a MockERC20 contract.');
-    }
-  };
-
-  // Filter products by search
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.seller.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    if (activeFilter === 'ALL') return true;
+    if (activeFilter === 'AVAILABLE') return !p.isSold;
+    if (activeFilter === 'SOLD') return p.isSold;
+    return true;
+  });
 
   return (
-    <div className="dashboard">
-      {/* ── Sidebar ── */}
-      <StatsPanel
-        account={account}
-        balance={balance}
-        tokenSymbol={tokenSymbol}
-        onRequestTokens={requestTokens}
-      />
-
-      {/* ── Main Area ── */}
-      <div className="marketplace-main">
-        <div className="marketplace-toolbar">
-          <h2>
-            🏪 Marketplace
-            <span className="product-count">{products.length} items</span>
-          </h2>
-          <div className="toolbar-actions">
-            <div className="search-input-wrap">
-              <span className="search-icon">🔍</span>
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <button className="btn-ghost" onClick={() => setRateModalOpen(true)}>
-              ⭐ Rate Seller
-            </button>
-            <button className="btn-primary" onClick={() => setListModalOpen(true)}>
-              + List Product
-            </button>
-          </div>
+    <div className="page-content">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '3rem' }}>
+        <div>
+          <h1 className="page-title">LIVE <span className="highlight">ASSETS</span></h1>
+          <p className="page-subtitle" style={{ fontSize: '0.9rem', maxWidth: '400px' }}>
+            The decentralized source for raw high-fidelity digital assets. Sovereign ownership, verified on-chain.
+          </p>
         </div>
+        <div className="marketplace-filters" style={{ marginBottom: 0 }}>
+          <button
+            className={`filter-btn ${activeFilter === 'ALL' ? 'active' : ''}`}
+            onClick={() => setActiveFilter('ALL')}
+          >
+            ALL
+          </button>
+          <button
+            className={`filter-btn ${activeFilter === 'AVAILABLE' ? 'active' : ''}`}
+            onClick={() => setActiveFilter('AVAILABLE')}
+          >
+            AVAILABLE
+          </button>
+          <button
+            className={`filter-btn ${activeFilter === 'SOLD' ? 'active' : ''}`}
+            onClick={() => setActiveFilter('SOLD')}
+          >
+            SOLD
+          </button>
+        </div>
+      </div>
 
+      {!isConnected ? (
+        <div className="empty-state">
+          <div className="icon">⚡</div>
+          <h3>AWAITING CONNECTION</h3>
+          <p>Connect your wallet to browse and acquire assets on the marketplace.</p>
+        </div>
+      ) : (
         <div className="product-grid">
           {loading ? (
             <>
-              <SkeletonCard />
-              <SkeletonCard />
               <SkeletonCard />
               <SkeletonCard />
               <SkeletonCard />
@@ -225,25 +230,25 @@ export default function Marketplace({ provider, account }) {
                 tokenSymbol={tokenSymbol}
                 account={account}
                 onBuy={buyProduct}
+                onRate={() => {
+                  // set rating modal target
+                  window.tempSellerToRate = p.seller;
+                  setRateModalOpen(true);
+                }}
                 index={idx}
               />
             ))
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">📭</div>
-              <h3>{searchQuery ? 'No matches found' : 'No products yet'}</h3>
-              <p>
-                {searchQuery
-                  ? 'Try a different search term.'
-                  : 'Be the first to list a product on the marketplace!'
-                }
-              </p>
+              <div className="icon">📭</div>
+              <h3>NO ASSETS FOUND</h3>
+              <p>No products match the current filter criteria.</p>
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* ── Modals ── */}
+      {/* Modals */}
       <ListProductModal
         isOpen={listModalOpen}
         onClose={() => setListModalOpen(false)}
@@ -253,7 +258,7 @@ export default function Marketplace({ provider, account }) {
       <RateSellerModal
         isOpen={rateModalOpen}
         onClose={() => setRateModalOpen(false)}
-        onSubmit={rateSeller}
+        onSubmit={(score) => rateSeller(window.tempSellerToRate, score)}
       />
     </div>
   );

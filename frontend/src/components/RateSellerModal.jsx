@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 export default function RateSellerModal({ isOpen, onClose, onSubmit }) {
   const [address, setAddress] = useState('');
   const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -13,12 +12,12 @@ export default function RateSellerModal({ isOpen, onClose, onSubmit }) {
     if (rating === 0) return;
     setLoading(true);
     try {
-      await onSubmit(address, rating);
+      await onSubmit(rating);
       setAddress('');
       setRating(0);
       onClose();
     } catch {
-      // error handled by parent
+      // error caught by parent
     } finally {
       setLoading(false);
     }
@@ -28,64 +27,47 @@ export default function RateSellerModal({ isOpen, onClose, onSubmit }) {
     if (e.target === e.currentTarget) onClose();
   };
 
-  const displayRating = hoverRating || rating;
-
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal-content">
+      <div className="modal-content" style={{ maxWidth: '400px' }}>
         <div className="modal-header">
-          <h2>⭐ Rate a Seller</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <h3><span className="icon">⍚</span> ENTITY RATING</h3>
+          <button className="modal-close" onClick={onClose} disabled={loading}>✕</button>
         </div>
 
-        <form className="modal-form" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="seller-address">Seller Address</label>
-            <input
-              id="seller-address"
-              type="text"
-              placeholder="0x..."
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              Submit performance metrics for the asset provider. This transaction will be recorded on-chain.
+            </p>
 
-          <div className="form-group">
-            <label>Rating</label>
-            <div className="star-rating-input">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  className={`star-btn ${star <= displayRating ? 'active' : ''}`}
-                  onClick={() => setRating(star)}
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(0)}
-                >
-                  {star <= displayRating ? '★' : '☆'}
-                </button>
-              ))}
-            </div>
-            {rating > 0 && (
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
-                {rating === 1 && '😞 Poor'}
-                {rating === 2 && '😐 Fair'}
-                {rating === 3 && '🙂 Good'}
-                {rating === 4 && '😊 Great'}
-                {rating === 5 && '🤩 Excellent!'}
+            <div className="input-group">
+              <label>SCORE [1-5]</label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    className={`btn-outline ${rating >= star ? 'btn-primary' : ''}`}
+                    style={{ flex: 1, padding: '0.5rem' }}
+                    onClick={() => setRating(star)}
+                    disabled={loading}
+                  >
+                    {star}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
 
-          <button
-            type="submit"
-            className={`btn-primary ${loading ? 'btn-loading' : ''}`}
-            disabled={loading || rating === 0}
-          >
-            {!loading && '📝 Submit Rating'}
-          </button>
+          <div className="modal-footer">
+            <button type="button" className="btn-outline" onClick={onClose} disabled={loading}>
+              CANCEL
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading || rating === 0}>
+              {loading ? 'CONFIRMING...' : 'WRITE TO LEDGER'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

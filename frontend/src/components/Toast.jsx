@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 
 const ToastContext = createContext(null);
 
@@ -9,17 +9,13 @@ export function ToastProvider({ children }) {
   const toastRefs = useRef({});
 
   const removeToast = useCallback((id) => {
-    // Mark as exiting first for animation
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, exiting: true } : t));
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-      delete toastRefs.current[id];
-    }, 250);
+    setToasts(prev => prev.filter(t => t.id !== id));
+    delete toastRefs.current[id];
   }, []);
 
   const addToast = useCallback(({ type = 'info', title, message, duration = 4000 }) => {
     const id = ++toastIdCounter;
-    const toast = { id, type, title, message, duration, exiting: false };
+    const toast = { id, type, title, message, duration };
     setToasts(prev => [...prev, toast]);
 
     if (duration > 0) {
@@ -29,39 +25,30 @@ export function ToastProvider({ children }) {
     return id;
   }, [removeToast]);
 
-  const toast = useCallback({
+  const toastMethods = useMemo(() => ({
     success: (title, message) => addToast({ type: 'success', title, message }),
     error: (title, message) => addToast({ type: 'error', title, message, duration: 6000 }),
     info: (title, message) => addToast({ type: 'info', title, message }),
     loading: (title, message) => addToast({ type: 'loading', title, message, duration: 0 }),
     dismiss: (id) => removeToast(id),
-  }, [addToast, removeToast]);
-
-  // Fix: toast needs to be a plain object, not using useCallback on an object literal
-  // We'll restructure this
+  }), [addToast, removeToast]);
 
   return (
-    <ToastContext.Provider value={toast}>
+    <ToastContext.Provider value={toastMethods}>
       {children}
       <div className="toast-container">
         {toasts.map(t => (
-          <div
-            key={t.id}
-            className={`toast toast-${t.type} ${t.exiting ? 'toast-exiting' : ''}`}
-            style={t.duration > 0 ? { '--toast-duration': `${t.duration}ms` } : {}}
-          >
-            <span className="toast-icon">
-              {t.type === 'success' && '✅'}
-              {t.type === 'error' && '❌'}
-              {t.type === 'info' && 'ℹ️'}
-              {t.type === 'loading' && '⏳'}
-            </span>
-            <div className="toast-body">
-              <div className="toast-title">{t.title}</div>
-              {t.message && <div className="toast-message">{t.message}</div>}
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            <div className="toast-header">
+              <span className="toast-title">
+                {t.type === 'success' && '[SYS.OK] '}
+                {t.type === 'error' && '[SYS.ERR] '}
+                {t.type === 'loading' && '[SYS.RUN] '}
+                {t.title}
+              </span>
+              <button className="toast-close" onClick={() => removeToast(t.id)}>✕</button>
             </div>
-            <button className="toast-dismiss" onClick={() => removeToast(t.id)}>✕</button>
-            {t.duration > 0 && <div className="toast-progress" />}
+            {t.message && <div className="toast-body">{t.message}</div>}
           </div>
         ))}
       </div>

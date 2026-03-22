@@ -1,32 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from './Toast';
 
-function StarRating({ rating, size = 'sm' }) {
-  const stars = [];
-  const fullStars = Math.floor(rating);
-  const hasHalf = rating % 1 >= 0.25;
-
-  for (let i = 0; i < 5; i++) {
-    if (i < fullStars) {
-      stars.push(<span key={i} className={`star filled ${size}`}>★</span>);
-    } else if (i === fullStars && hasHalf) {
-      stars.push(<span key={i} className={`star half-filled ${size}`}>★</span>);
-    } else {
-      stars.push(<span key={i} className={`star ${size}`}>☆</span>);
-    }
-  }
-
-  return (
-    <div className="seller-rating">
-      {stars}
-      <span className="rating-number">
-        {rating > 0 ? rating.toFixed(1) : 'New'}
-      </span>
-    </div>
-  );
-}
-
-export default function ProductCard({ product, tokenSymbol, account, onBuy, index = 0 }) {
-  const isOwner = product.seller.toLowerCase() === account.toLowerCase();
+export default function ProductCard({ product, tokenSymbol, account, onBuy, onRate, index = 0 }) {
+  const toast = useToast();
+  const isOwner = account && product.seller.toLowerCase() === account.toLowerCase();
 
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +13,17 @@ export default function ProductCard({ product, tokenSymbol, account, onBuy, inde
     if (!product.metadataCID) {
       setLoading(false);
       setError(true);
+      return;
+    }
+
+    if (product.metadataCID === 'mock') {
+      // assign dummy badge for mock views
+      setMetadata({
+        name: product.name,
+        description: "A highly classified digital asset container.",
+        image: null
+      });
+      setLoading(false);
       return;
     }
 
@@ -64,57 +52,81 @@ export default function ProductCard({ product, tokenSymbol, account, onBuy, inde
     return ipfsUri;
   };
 
+  const imageSrc = metadata?.image ? getImageUrl(metadata.image) : null;
+
   return (
-    <div className={`product-card ${product.isSold ? 'sold' : ''} stagger-${Math.min(index + 1, 8)}`}>
-      {loading ? (
-         <div className="skeleton skeleton-line" style={{ height: '160px', borderRadius: 'var(--radius-md)', marginBottom: '1rem' }} />
-      ) : error || !metadata?.image ? (
-         <div style={{ height: '160px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>
-           📦
-         </div>
-      ) : (
-         <div style={{ height: '160px', borderRadius: 'var(--radius-md)', marginBottom: '1rem', overflow: 'hidden' }}>
-           <img 
-             src={getImageUrl(metadata.image)} 
-             alt={metadata?.name || product.name} 
-             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-             onError={(e) => { e.target.style.display = 'none'; setError(true); }}
-           />
-         </div>
-      )}
+    <div className="asset-card">
+      {product.isSold ? (
+        <div className="asset-badge badge-sold">SOLD</div>
+      ) : isOwner ? (
+        <div className="asset-badge badge-owner">YOUR LISTING</div>
+      ) : null}
 
-      <div className="product-header">
-        <h4 className="product-name">{metadata?.name || product.name}</h4>
-        <span className="product-id">#{product.id}</span>
-      </div>
-
-      {(!loading && !error && metadata?.description) && (
-        <p className="product-description" style={{ fontSize: '0.85rem', color: 'rgba(255, 255, 255, 0.6)', margin: '0.5rem 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {metadata.description}
-        </p>
-      )}
-
-      <div className="product-price">
-        {product.price} <span className="token-symbol">{tokenSymbol}</span>
-      </div>
-
-      <div className="seller-info">
-        <div className="seller-address">
-          🔗 {product.seller.substring(0, 6)}...{product.seller.substring(product.seller.length - 4)}
-        </div>
-        <StarRating rating={product.sellerRating} />
-      </div>
-
-      <div className="card-actions">
-        {product.isSold ? null : isOwner ? (
-          <button className="btn-own" disabled>
-            📦 Your Listing
-          </button>
+      <div className="asset-image-container">
+        {loading ? (
+          <div className="skeleton" style={{ width: '100%', height: '100%' }}></div>
+        ) : error || !imageSrc ? (
+          <div className="asset-placeholder">{"<"}NO_MEDIA{">"}</div>
         ) : (
-          <button className="btn-buy" onClick={() => onBuy(product)}>
-            ⚡ Buy Now
-          </button>
+          <img
+            src={imageSrc}
+            alt={metadata?.name || product.name}
+            className="asset-image"
+            onError={(e) => { e.target.style.display = 'none'; setError(true); }}
+          />
         )}
+      </div>
+
+      <div className="asset-info">
+        <h3 className="asset-title">{metadata?.name || product.name}</h3>
+
+        <div className="asset-meta">
+          <div className="meta-item">
+            <span className="meta-label">IPFS</span>
+            <span className="meta-value">{product.metadataCID?.substring(0, 12)}...</span>
+          </div>
+          <div className="meta-item highlight">
+            <span className="meta-label">{tokenSymbol || 'MTK'}</span>
+            <span className="meta-value">{product.price}</span>
+          </div>
+        </div>
+
+        <div className="asset-meta" style={{ marginTop: '0.5rem', paddingTop: '0' }}>
+          <div className="meta-item">
+            <span className="meta-label">SELLER</span>
+            <span className="meta-value">{product.seller.substring(0, 8)}</span>
+          </div>
+          <div className="meta-item" style={{ cursor: 'pointer' }} onClick={() => onRate && onRate()}>
+            <span className="meta-label">REP</span>
+            <span className="meta-value">{product.sellerRating > 0 ? product.sellerRating.toFixed(1) : 'NEW'} ⍚</span>
+          </div>
+        </div>
+
+        <div className="asset-actions">
+          {!isOwner && !product.isSold && (
+            <button className="btn-primary" onClick={() => onBuy(product)}>
+              COLLECT ASSET
+            </button>
+          )}
+          {isOwner && !product.isSold && (
+            <>
+              <button
+                className="btn-outline"
+                style={{ fontSize: '0.7rem' }}
+                onClick={() => toast.error('PROTOCOL LOCKED', 'Asset price is immutable in this contract version.')}
+              >
+                EDIT PRICE
+              </button>
+              <button
+                className="btn-outline-magenta"
+                style={{ fontSize: '0.7rem' }}
+                onClick={() => toast.error('PROTOCOL LOCKED', 'Delisting is not supported by the current ledger contract.')}
+              >
+                DELIST
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

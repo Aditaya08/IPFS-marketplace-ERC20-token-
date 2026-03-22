@@ -7,38 +7,48 @@ export default function ListProductModal({ isOpen, onClose, onSubmit, tokenSymbo
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const toast = useToast();
 
   if (!isOpen) return null;
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!image) {
-      toast.error('Image Required', 'Please select a product image to upload.');
+      toast.error('MEDIA REQUIRED', 'Asset image missing.');
       return;
     }
 
     setLoading(true);
     try {
-      setUploadStatus('Uploading image to IPFS...');
+      setUploadStatus('UPLOADING MEDIA...');
       const imageCID = await uploadImageToIPFS(image);
       
-      setUploadStatus(`Pinned! Image CID: ${imageCID.substring(0,6)}... Uploading metadata...`);
+      setUploadStatus(`MEDIA SECURED [${imageCID.substring(0,6)}...] UPLOADING METADATA...`);
       const metadataCID = await uploadMetadataToIPFS(name, description, imageCID);
       
-      setUploadStatus(`Pinned! Metadata CID: ${metadataCID.substring(0,6)}... Confirm in wallet...`);
+      setUploadStatus(`AWAITING SIGNATURE...`);
       await onSubmit(name, price, metadataCID);
       
       setName('');
       setDescription('');
       setPrice('');
       setImage(null);
+      setImagePreview(null);
       setUploadStatus('');
       onClose();
     } catch (err) {
-      toast.error('Listing Failed', err.message || 'Error occurred during listing to IPFS.');
+      // swallow error; parent handles ui feedback
     } finally {
       setLoading(false);
       setUploadStatus('');
@@ -53,81 +63,103 @@ export default function ListProductModal({ isOpen, onClose, onSubmit, tokenSymbo
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content">
         <div className="modal-header">
-          <h2>📦 List New Product</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <h3><span className="icon">◈</span> DEPLOY ASSET</h3>
+          <button className="modal-close" onClick={onClose} disabled={loading}>✕</button>
         </div>
 
-        <form className="modal-form" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="product-name">Product Name</label>
-            <input
-              id="product-name"
-              type="text"
-              placeholder="e.g. Digital Art Collection"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="product-desc">Description</label>
-            <textarea
-              id="product-desc"
-              placeholder="Describe your product..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-              rows="3"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="product-price">Price ({tokenSymbol || 'TOKEN'})</label>
-            <input
-              id="product-price"
-              type="number"
-              step="any"
-              min="0"
-              placeholder="0.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="product-image">Product Image</label>
-            <input
-              id="product-image"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setImage(e.target.files[0])}
-              required
-            />
-          </div>
-
-          {price && parseFloat(price) > 0 && (
-            <div style={{
-              background: 'rgba(16, 185, 129, 0.08)',
-              border: '1px solid rgba(16, 185, 129, 0.2)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '0.75rem 1rem',
-              fontSize: '0.85rem',
-              color: 'var(--emerald-400)',
-            }}>
-              💎 Listing for <strong>{parseFloat(price).toLocaleString()} {tokenSymbol}</strong>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="input-group">
+              <label htmlFor="product-name">ASSET DESIGNATION</label>
+              <input
+                id="product-name"
+                type="text"
+                placeholder="e.g. NEURAL_INTERFACE_V2"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoFocus
+                disabled={loading}
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            className={`btn-success ${loading ? 'btn-loading' : ''}`}
-            disabled={loading}
-          >
-            {loading ? uploadStatus || 'Loading...' : '🚀 Submit Listing'}
-          </button>
+            <div className="input-group">
+              <label htmlFor="product-desc">DATA PAYLOAD</label>
+              <textarea
+                id="product-desc"
+                placeholder="Enter asset specifications..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+                rows="3"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="product-price">VALUATION ({tokenSymbol || 'MTK'})</label>
+              <input
+                id="product-price"
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="input-group">
+              <label>RAW MEDIA</label>
+              <div 
+                className={`file-upload-box ${image ? 'active' : ''}`}
+                style={{ padding: image ? '1rem' : '2rem' }}
+                onClick={() => !loading && document.getElementById('product-image-upload').click()}
+              >
+                {!imagePreview ? (
+                  <>
+                    <div className="file-upload-icon">+</div>
+                    <div className="file-upload-text">SELECT TERMINAL FILE [IMAGE/*]</div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                    <img src={imagePreview} alt="Preview" style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', border: '1px solid var(--border-light)' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)' }}>{image.name}</span>
+                      <span style={{ color: 'var(--accent-neon)', fontWeight: 800 }}>[ CLICK TO CHANGE ]</span>
+                    </div>
+                  </div>
+                )}
+                
+                <input
+                  id="product-image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: 'none' }}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            
+            {uploadStatus && (
+               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent-neon)', marginTop: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+                 &gt; {uploadStatus}
+                 <span className="cursor-blink">_</span>
+               </div>
+            )}
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn-outline" onClick={onClose} disabled={loading}>
+              ABORT
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'PROCESSING...' : 'INITIALIZE DEPLOYMENT'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
