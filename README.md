@@ -1,93 +1,97 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/ajay-dhangar/ajay-dhangar/main/assets/icons/web3.gif" width="100" />
-  <h1>🚀 Web3 Decentralized Marketplace</h1>
-  <p>A premium, full-stack Web3 application demonstrating a decentralized e-commerce platform built with Solidity, React, and Pinata IPFS.</p>
-</div>
+# ETHER-RAW MARKETPLACE
+
+A blazingly fast, fully decentralized peer-to-peer marketplace built with Solidity, React, and IPFS.
+
+No glassmorphism. No bloated CSS frameworks. Pure, high-contrast, terminal-inspired brutalism.
 
 ---
 
-## 🌟 Features
+## ARCHITECTURE
 
-- 💎 **Custom ERC-20 Payments**: Transact seamlessly using a standard ERC-20 token instead of volatile native ETH.
-- 📦 **IPFS Metadata Integration**: Product images and descriptions are securely pinned off-chain via **Pinata**, drastically reducing Ethereum gas costs.
-- ⭐️ **On-Chain Reputation System**: Users can rate and review sellers transparently directly on the blockchain.
-- 🎨 **Premium Aesthetic Frontend**: A highly responsive, glassmorphism-inspired UI featuring dynamic toast notifications, skeleton loaders, and interactive micro-animations.
+We care about stable architecture.
+- **Custom Token Payments:** Transact via a standard ERC-20 token. We don't use volatile native ETH here.
+- **Decentralized Storage:** Images and metadata are pinned off-chain to IPFS via Pinata. We store only the CID hash on-chain to keep gas costs astronomically low. Skill issue if you store base64 on-chain.
+- **On-Chain Reputation:** Immutable buyer-to-seller rating system. No central server. No admin manipulation.
+- **Brutalist UI:** Sharp modals, live image previews, sliding terminal alerts (`[SYS.OK]`), and responsive grid layouts. Built for developers. 
 
 ---
 
-## 🏗️ Architecture
+## DIRECTORY STRUCTURE
 
 ```text
-📦 Marketplace Repository
- ┣ 📂 contracts
- ┃ ┣ 📜 DecentralizedMarketplace.sol (Core Logic)
- ┃ ┗ 📜 MockERC20.sol                  (In-App Currency)
- ┗ 📂 frontend
-   ┣ 📂 src
-   ┃ ┣ 📂 components                   (React UI Components)
-   ┃ ┣ 📂 utils                        (IPFS / Axio Helpers)
-   ┃ ┗ 📜 Marketplace.jsx              (Global State / Web3 Engine)
-   ┗ 📜 package.json
+.
+├── contracts/
+│   ├── DecentralizedMarketplace.sol    # Core engine (listings, purchases, ratings)
+│   └── MockERC20.sol                   # In-app currency token
+└── frontend/
+    ├── src/
+    │   ├── components/                 # React UI (Modals, Sidebar, TokenHub)
+    │   ├── utils/                      # Pinata IPFS integrations
+    │   ├── App.jsx                     # Application shell and router
+    │   └── Marketplace.jsx             # Decentralized asset grid logic
+    └── package.json
 ```
 
 ---
 
-## ⚙️ 1. Smart Contract Deployment (Remix IDE)
+## 1. SMART CONTRACT DEPLOYMENT
 
-This project requires deploying the contracts manually via [Remix IDE](https://remix.ethereum.org/).
+Deploy the contracts via Remix IDE (or your terminal tool of choice).
 
-1. Upload `DecentralizedMarketplace.sol` and `MockERC20.sol` into Remix.
-2. Under the **Solidity Compiler** tab, compile both using version **`0.8.20`**.
-3. Under the **Deploy & Run Transactions** tab, set the Environment to **Injected Provider - MetaMask**.
-4. **Deploy the Token First:**
-   - Select `MockERC20`.
-   - Feed the constructor arguments: `name` ("MockToken"), `symbol` ("BCK"), and `initialSupply` (`1000000000000000000000` for 1,000 tokens).
-   - Click Deploy. Copy the resulting **Token Address**.
-5. **Deploy the Marketplace:**
-   - Select `DecentralizedMarketplace`.
-   - Pass the Token Address from Step 4 as the constructor argument.
-   - Click Deploy. Copy the resulting **Marketplace Address**.
-
----
-
-## 🦊 2. MetaMask Configuration
-
-1. Connect MetaMask to the same network you deployed to (e.g., Sepolia or Localhost).
-2. Import the newly created `MockERC20` token using the copied Token Address so you can see your custom balance inside your wallet!
+1. Compile `DecentralizedMarketplace.sol` and `MockERC20.sol` using Solidity `^0.8.20`.
+2. Connect your environment to Injected Provider (MetaMask).
+3. **Deploy the Token:**
+   - Contract: `MockERC20`
+   - Args: `name` ("MockToken"), `symbol` ("MTK"), `initialSupply` (`1000000000000000000000`)
+   - Copy the deployed Token Address.
+4. **Deploy the Marketplace:**
+   - Contract: `DecentralizedMarketplace`
+   - Args: Paste the Token Address from step 3.
+   - Copy the deployed Marketplace Address.
 
 ---
 
-## 💻 3. Frontend Setup
+## 2. METAMASK CONFIG
+
+1. Connect to the exact network you deployed to (Sepolia, Localhost, etc).
+2. Import the new Token Address into MetaMask so your balance is visible in your wallet.
+
+---
+
+## 3. FRONTEND SETUP
+
+Configure the ABIs and spin up the client.
 
 1. Open `frontend/src/contract.js`.
-2. Overwrite the top two lines with your freshly deployed addresses:
-   ```javascript
-   export const MARKETPLACE_ADDRESS = "0xYourMarketplaceAddressHere";
-   export const TOKEN_ADDRESS = "0xYourTokenAddressHere";
-   ```
-3. Update the ABI configurations in that exact same file (`MARKETPLACE_ABI` and `TOKEN_ABI`) if they have changed.
-4. Open a terminal inside the frontend folder, install dependencies, and start Vite:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+2. Update the addresses at the top of the file:
+```javascript
+export const MARKETPLACE_ADDRESS = "0xYourMarketplaceAddressHere";
+export const TOKEN_ADDRESS = "0xYourTokenAddressHere";
+```
+*(Update the ABI arrays in this file if you modified the Solidity source. Do better.)*
 
-### ☁️ Configure Pinata IPFS
-In order to upload images and descriptions:
-1. Obtain an API JWT from [Pinata Cloud](https://app.pinata.cloud/).
+3. Install dependencies and run the blazingly fast Vite dev server:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### IPFS CONFIGURATION (PINATA)
+To handle image uploads, hook up Pinata IPFS:
+1. Generate an API JWT from Pinata Cloud.
 2. Create a `.env` file in the `/frontend` directory.
-3. Add the JWT token:
-   ```env
-   VITE_PINATA_JWT=eyJhb...
-   ```
-*(Restart your `npm run dev` server if it was running while you made this file!)*
+3. Add your JWT:
+```env
+VITE_PINATA_JWT=eyJhb...
+```
+*(Restart your dev server if it was already running. Common sense.)*
 
 ---
 
-## 🛍️ 4. How to Use the DApp
+## 4. USAGE
 
-- 🚰 **Faucet:** Click `Connect Wallet`, then click the Faucet button in the sidebar to mint 100 free mock tokens to yourself!
-- 📤 **List a Product:** Click `List Product`, provide a name, price, description, and upload an image. The UI will pin it to IPFS and execute the smart contract.
-- 🛒 **Buy:** Switch to a different MetaMask account. Approving the spend and purchasing the product will automatically trigger 2 MetaMask interactions.
-- ⭐ **Rate:** Instantly rate the seller after your purchase via the `Rate Seller` action!
+- **TESTNET FAUCET:** Connect your wallet, navigate to `TOKEN HUB`, and mint 100 free mock tokens.
+- **MINT ASSET:** Click `MINT NEW ASSET`, input specifications, and upload raw media. The client pins to IPFS and executes the smart contract listing.
+- **ACQUIRE:** Switch to a different MetaMask account. Clicking `COLLECT ASSET` triggers two prompts: ERC-20 approval and the purchase execution.
+- **RATE:** Leave an immutable rating for the seller directly on the blockchain after acquisition.
